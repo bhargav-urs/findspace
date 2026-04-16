@@ -167,20 +167,23 @@ export default function MessagesPage() {
               </div>
             ) : (
               <>
-                {/* Header */}
-                <div className="px-5 py-3.5 border-b flex items-center gap-3"
+                {/* Header — click name/avatar to view their profile */}
+                <div className="px-5 py-3.5 border-b flex items-center justify-between"
                      style={{ borderColor: 'var(--apple-border)' }}>
                   <Link
                     href={`/users/${selectedConv?.otherUserId}`}
-                    className="flex items-center gap-3 group"
-                    title="View profile"
+                    className="flex items-center gap-3"
+                    style={{ cursor: 'pointer', textDecoration: 'none' }}
+                    title={`View ${otherName}'s profile`}
                   >
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold transition-opacity group-hover:opacity-80"
-                         style={{ background: `hsl(${((selectedConv?.otherUserId || 1) * 83) % 360}, 55%, 55%)` }}>
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
+                      style={{ background: `hsl(${((selectedConv?.otherUserId || 1) * 83) % 360}, 55%, 55%)` }}
+                    >
                       {otherInitials}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold group-hover:underline" style={{ color: 'var(--apple-dark)' }}>
+                      <p className="text-sm font-semibold" style={{ color: 'var(--apple-blue)', textDecoration: 'underline' }}>
                         {otherName}
                       </p>
                       {selectedConv?.listingId && (
@@ -189,6 +192,12 @@ export default function MessagesPage() {
                         </p>
                       )}
                     </div>
+                    {/* Profile icon — makes it obvious it's clickable */}
+                    <svg className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--apple-blue)' }}
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
+                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                    </svg>
                   </Link>
                 </div>
 
