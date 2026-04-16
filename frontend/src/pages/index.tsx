@@ -16,10 +16,10 @@ const FEATURES = [
 ];
 
 export default function Home() {
-  const [listings, setListings]   = useState<Listing[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [search, setSearch]       = useState('');
-  const [maxRent, setMaxRent]     = useState('');
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [search, setSearch]     = useState('');
+  const [maxRent, setMaxRent]   = useState('');
 
   useEffect(() => {
     api.get('/listings').then(r => { setListings(r.data); setLoading(false); }).catch(() => setLoading(false));
@@ -34,72 +34,147 @@ export default function Home() {
 
   return (
     <Layout>
-      {/* ── Hero ───────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden" style={{ background: '#000', minHeight: '580px' }}>
-        <img
-          src="/images/hero_bg.png"
-          alt="City skyline"
-          className="absolute inset-0 w-full h-full object-cover opacity-60"
-        />
-        <div className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.55) 100%)' }} />
+      {/* ── Hero ─────────────────────────────────────────────────────────── */}
+      {/* Pure CSS gradient hero — no image dependency, always looks sharp   */}
+      <section
+        className="relative overflow-hidden"
+        style={{
+          minHeight: '600px',
+          background: 'linear-gradient(135deg, #0a0a1a 0%, #0d1b3e 35%, #0f2b5b 55%, #1a1a2e 80%, #0a0a1a 100%)',
+        }}
+      >
+        {/* Animated background orbs */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {/* Large blue orb top-right */}
+          <div style={{
+            position: 'absolute', top: '-10%', right: '-5%',
+            width: '520px', height: '520px', borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(0,113,227,0.35) 0%, rgba(0,113,227,0) 70%)',
+          }} />
+          {/* Medium teal orb bottom-left */}
+          <div style={{
+            position: 'absolute', bottom: '-15%', left: '-5%',
+            width: '420px', height: '420px', borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(90,200,250,0.2) 0%, rgba(90,200,250,0) 70%)',
+          }} />
+          {/* Small accent orb centre */}
+          <div style={{
+            position: 'absolute', top: '30%', left: '40%',
+            width: '240px', height: '240px', borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(94,92,230,0.18) 0%, rgba(94,92,230,0) 70%)',
+          }} />
+          {/* Grid overlay */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)',
+            backgroundSize: '60px 60px',
+          }} />
+          {/* Floating dots */}
+          {[
+            { top:'15%', left:'8%', size:3, opacity:0.5 },
+            { top:'25%', left:'22%', size:2, opacity:0.3 },
+            { top:'60%', left:'15%', size:4, opacity:0.4 },
+            { top:'70%', left:'35%', size:2, opacity:0.3 },
+            { top:'20%', right:'15%', size:3, opacity:0.5 },
+            { top:'45%', right:'8%', size:2, opacity:0.35 },
+            { top:'75%', right:'20%', size:4, opacity:0.4 },
+          ].map((dot, i) => (
+            <div key={i} style={{
+              position: 'absolute', top: dot.top, left: (dot as any).left, right: (dot as any).right,
+              width: `${dot.size}px`, height: `${dot.size}px`, borderRadius: '50%',
+              background: 'rgba(255,255,255,' + dot.opacity + ')',
+            }} />
+          ))}
+        </div>
+
+        {/* Content */}
         <div className="relative z-10 page-container flex flex-col items-center justify-center text-center py-32 gap-6">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium mb-2 animate-fadeIn"
-               style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.25)' }}>
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          {/* Badge */}
+          <div
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium animate-fadeIn"
+            style={{ background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,255,255,0.15)', backdropFilter: 'blur(10px)' }}
+          >
+            <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#30d158' }} />
             Listings updated daily
           </div>
-          <h1 className="text-white animate-fadeUp" style={{ maxWidth: '700px' }}>
-            Find your perfect space in minutes
+
+          {/* Headline */}
+          <h1 className="animate-fadeUp" style={{ maxWidth: '680px', color: '#fff', fontSize: 'clamp(2.2rem, 5.5vw, 3.75rem)', lineHeight: 1.08, letterSpacing: '-0.03em' }}>
+            Find your perfect<br />
+            <span style={{ background: 'linear-gradient(90deg, #5ac8fa, #0071e3)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              space
+            </span>{' '}in minutes
           </h1>
-          <p className="text-lg animate-fadeUp delay-100" style={{ color: 'rgba(255,255,255,0.8)', maxWidth: '480px' }}>
-            Browse unique rooms and apartments, connect with owners directly, and move in with confidence.
+
+          <p className="animate-fadeUp delay-100" style={{ color: 'rgba(255,255,255,0.7)', maxWidth: '460px', fontSize: '1.125rem', lineHeight: 1.55 }}>
+            Browse rooms and apartments, connect with owners directly, and move in with confidence.
           </p>
-          <div className="flex gap-3 animate-fadeUp delay-200">
-            <Link href="/listings" className="btn-primary text-base px-6 py-3" style={{ background: 'var(--apple-blue)' }}>
+
+          {/* CTAs */}
+          <div className="flex gap-3 flex-wrap justify-center animate-fadeUp delay-200">
+            <Link href="/listings" className="btn-primary text-base px-7 py-3" style={{ background: 'var(--apple-blue)', fontSize: '0.9375rem' }}>
               Browse Listings
             </Link>
-            <Link href="/register" className="btn-secondary text-base px-6 py-3"
-              style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', backdropFilter: 'blur(10px)' }}>
+            <Link href="/register" className="btn-secondary text-base px-7 py-3"
+              style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', fontSize: '0.9375rem' }}>
               Sign Up Free
             </Link>
           </div>
+
           {/* Stats */}
-          <div className="flex gap-8 mt-8 animate-fadeUp delay-300">
+          <div className="flex gap-10 mt-6 animate-fadeUp delay-300">
             {[['10+', 'Active listings'], ['100%', 'Free to join'], ['⚡', 'Instant messaging']].map(([val, label]) => (
               <div key={label} className="text-center">
-                <div className="text-2xl font-bold text-white">{val}</div>
-                <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>{label}</div>
+                <div className="text-2xl font-bold" style={{ color: '#fff' }}>{val}</div>
+                <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.55)' }}>{label}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── Search Bar ─────────────────────────────────────────── */}
+      {/* ── Search Bar ────────────────────────────────────────────────────── */}
       <section style={{ background: '#fff', borderBottom: '1px solid var(--apple-border)' }}>
         <div className="page-container py-5">
           <div className="flex flex-col sm:flex-row gap-3">
+
+            {/* FIX 1: Search icon — increased padding so icon doesn't overlap text */}
             <div className="flex-1 relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--apple-mid)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+                style={{ left: '14px', color: 'var(--apple-mid)' }}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
               </svg>
               <input
-                className="input pl-10"
+                className="input"
+                style={{ paddingLeft: '42px' }}
                 placeholder="Search by title, city, or neighborhood…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
             </div>
+
+            {/* FIX 2: Max rent — removed conflicting placeholder, "Max $" prefix is the label */}
             <div className="relative sm:w-52">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--apple-mid)' }}>Max $</span>
+              <span
+                className="absolute top-1/2 -translate-y-1/2 text-sm font-medium pointer-events-none select-none"
+                style={{ left: '14px', color: 'var(--apple-mid)' }}
+              >
+                Max $
+              </span>
               <input
-                className="input pl-10"
+                className="input"
                 type="number"
-                placeholder="Any rent"
+                min="0"
+                style={{ paddingLeft: '52px' }}
+                placeholder=""
                 value={maxRent}
                 onChange={e => setMaxRent(e.target.value)}
               />
             </div>
+
             {(search || maxRent) && (
               <button className="btn-secondary px-4 text-sm" onClick={() => { setSearch(''); setMaxRent(''); }}>
                 Clear
@@ -109,7 +184,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Listings Grid ──────────────────────────────────────── */}
+      {/* ── Listings Grid ─────────────────────────────────────────────────── */}
       <section className="page-container py-12">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -144,11 +219,11 @@ export default function Home() {
         )}
       </section>
 
-      {/* ── Features ───────────────────────────────────────────── */}
+      {/* ── Features ──────────────────────────────────────────────────────── */}
       <section style={{ background: '#fff', borderTop: '1px solid var(--apple-border)' }}>
         <div className="page-container py-16 text-center">
           <h2 className="mb-2" style={{ color: 'var(--apple-dark)' }}>Everything you need</h2>
-          <p className="mb-12" style={{ color: 'var(--apple-mid)', maxWidth: '500px', margin: '0.5rem auto 3rem' }}>
+          <p style={{ color: 'var(--apple-mid)', maxWidth: '500px', margin: '0.5rem auto 3rem' }}>
             FindSpace gives tenants and landlords all the tools to make renting effortless.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -163,13 +238,17 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── CTA ────────────────────────────────────────────────── */}
-      <section style={{ background: 'var(--apple-blue)' }}>
+      {/* ── CTA Banner ────────────────────────────────────────────────────── */}
+      <section style={{ background: 'linear-gradient(135deg, #0a0a1a 0%, #0d1b3e 50%, #0071e3 100%)' }}>
         <div className="page-container py-16 text-center">
-          <h2 className="text-white mb-3">Ready to find your space?</h2>
-          <p className="mb-8" style={{ color: 'rgba(255,255,255,0.8)' }}>Join hundreds of renters who found their home on FindSpace.</p>
-          <Link href="/register" className="inline-flex items-center gap-2 btn-secondary text-base px-8 py-3"
-            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)' }}>
+          <h2 style={{ color: '#fff' }} className="mb-3">Ready to find your space?</h2>
+          <p className="mb-8" style={{ color: 'rgba(255,255,255,0.7)' }}>
+            Join hundreds of renters who found their home on FindSpace.
+          </p>
+          <Link href="/register"
+            className="inline-flex items-center gap-2 px-8 py-3 rounded-full text-base font-medium transition-colors"
+            style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)' }}
+          >
             Get started for free
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
@@ -182,17 +261,19 @@ export default function Home() {
 }
 
 function ListingCard({ listing, index }: { listing: Listing; index: number }) {
-  const delay = `${index * 60}ms`;
   return (
-    <Link href={`/listings/${listing.id}`} className="card block overflow-hidden animate-fadeUp" style={{ animationDelay: delay, animationFillMode: 'both' }}>
-      {/* Color band */}
+    <Link href={`/listings/${listing.id}`}
+      className="card block overflow-hidden animate-fadeUp"
+      style={{ animationDelay: `${index * 60}ms`, animationFillMode: 'both' }}
+    >
       <div className="h-2" style={{ background: `hsl(${(listing.id * 47) % 360}, 65%, 60%)` }} />
       <div className="p-5">
         <div className="flex items-start justify-between gap-2 mb-3">
           <h3 className="font-semibold text-base leading-snug line-clamp-2" style={{ color: 'var(--apple-dark)' }}>
             {listing.title}
           </h3>
-          <span className="flex-shrink-0 text-sm font-bold px-2.5 py-1 rounded-full" style={{ background: 'rgba(0,113,227,0.1)', color: 'var(--apple-blue)' }}>
+          <span className="flex-shrink-0 text-sm font-bold px-2.5 py-1 rounded-full"
+            style={{ background: 'rgba(0,113,227,0.1)', color: 'var(--apple-blue)' }}>
             ${listing.rent}/mo
           </span>
         </div>
