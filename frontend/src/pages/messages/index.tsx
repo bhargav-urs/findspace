@@ -10,6 +10,19 @@ interface Conversation {
 }
 interface Message { id: number; senderId: number; senderEmail: string; content: string; sentAt: string; }
 
+/** Decode email from JWT stored in localStorage — instant, no API call needed.
+ *  JWT payload is base64url-encoded JSON. The backend stores email as the 'sub' claim. */
+function getEmailFromToken(): string {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return '';
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.sub || '';
+  } catch {
+    return '';
+  }
+}
+
 export default function MessagesPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId]       = useState<number | null>(null);
@@ -18,8 +31,10 @@ export default function MessagesPage() {
   const [loading, setLoading]             = useState(true);
   const [sending, setSending]             = useState(false);
   const [error, setError]                 = useState<string | null>(null);
-  // Store current user's EMAIL — always reliable, no async timing issues
-  const [myEmail, setMyEmail]             = useState<string>('');
+  // Read email directly from the JWT — available instantly on page load
+  const [myEmail]                         = useState<string>(() =>
+    typeof window !== 'undefined' ? getEmailFromToken() : ''
+  );
   const bottomRef = useRef<HTMLDivElement>(null);
   const router    = useRouter();
 
@@ -27,14 +42,9 @@ export default function MessagesPage() {
     if (typeof window !== 'undefined' && !localStorage.getItem('token')) {
       router.push('/login'); return;
     }
-    // Fetch current user email first, then conversations
-    api.get('/users/me')
-      .then(r => setMyEmail(r.data.email || ''))
-      .catch(() => {});
-
     api.get('/messages/conversations')
       .then(r => { setConversations(r.data); setLoading(false); })
-      .catch(() => { setError('Failed to load conversations.'); setLoading(false); });
+      .catch(() => { setError('Failed to load conversations. Please refresh.'); setLoading(false); });
   }, []);
 
   useEffect(() => {
@@ -44,7 +54,6 @@ export default function MessagesPage() {
       .catch(() => setError('Failed to load messages.'));
   }, [selectedId]);
 
-  // Auto-scroll to newest message
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -74,9 +83,10 @@ export default function MessagesPage() {
     } finally { setSending(false); }
   };
 
-  const selectedConv = conversations.find(c => c.id === selectedId);
-  const otherName    = selectedConv ? selectedConv.otherUserEmail.split('@')[0] : '';
+  const selectedConv  = conversations.find(c => c.id === selectedId);
+  const otherName     = selectedConv ? selectedConv.otherUserEmail.split('@')[0] : '';
   const otherInitials = otherName.slice(0, 2).toUpperCase();
+  const myInitials    = myEmail.slice(0, 2).toUpperCase();
 
   return (
     <Layout>
@@ -139,7 +149,7 @@ export default function MessagesPage() {
               <div className="flex-1 flex flex-col items-center justify-center" style={{ color: 'var(--apple-mid)' }}>
                 <div className="text-5xl mb-3">💬</div>
                 <p className="font-medium">Select a conversation</p>
-                <p className="text-sm mt-1">Choose someone to chat with from the left</p>
+                <p className="text-sm mt-1">Choose someone from the left</p>
               </div>
             ) : (
               <>
@@ -159,20 +169,20 @@ export default function MessagesPage() {
                   </div>
                 </div>
 
-                {/* Messages list */}
+                {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
                   {error && (
-                    <p className="text-center text-sm" style={{ color: 'var(--apple-red)' }}>{error}</p>
+                    <p className="text-center text-sm py-2" style={{ color: 'var(--apple-red)' }}>{error}</p>
                   )}
 
                   {messages.map(msg => {
-                    // Compare by email — avoids async timing issues with numeric IDs
+                    // Compare senderEmail against email decoded from JWT — works instantly on load
                     const isMe = myEmail !== '' && msg.senderEmail === myEmail;
 
                     return (
                       <div key={msg.id} className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
 
-                        {/* Other person's avatar — only on their side */}
+                        {/* Other person avatar — left side only */}
                         {!isMe && (
                           <div
                             className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
@@ -182,12 +192,12 @@ export default function MessagesPage() {
                           </div>
                         )}
 
-                        <div className={`max-w-[70%] space-y-1 ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
+                        <div className={`max-w-[70%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                           <div
                             className="px-4 py-2.5 rounded-2xl text-sm leading-relaxed"
                             style={{
-                              background:            isMe ? 'var(--apple-blue)' : '#e9e9eb',
-                              color:                 isMe ? '#fff' : 'var(--apple-dark)',
+                              background:              isMe ? 'var(--apple-blue)' : '#e9e9eb',
+                              color:                   isMe ? '#fff' : 'var(--apple-dark)',
                               borderBottomRightRadius: isMe ? '4px' : '18px',
                               borderBottomLeftRadius:  isMe ? '18px' : '4px',
                             }}
@@ -195,20 +205,20 @@ export default function MessagesPage() {
                             {msg.content}
                           </div>
                           <p
-                            className={`text-xs px-1 ${isMe ? 'text-right' : 'text-left'}`}
+                            className={`text-xs px-1 mt-1 ${isMe ? 'text-right' : 'text-left'}`}
                             style={{ color: 'var(--apple-mid)' }}
                           >
                             {new Date(msg.sentAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                           </p>
                         </div>
 
-                        {/* My avatar — only on my side */}
+                        {/* My avatar — right side only */}
                         {isMe && (
                           <div
                             className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
                             style={{ background: 'var(--apple-blue)' }}
                           >
-                            {myEmail.slice(0, 2).toUpperCase()}
+                            {myInitials}
                           </div>
                         )}
                       </div>
@@ -217,7 +227,7 @@ export default function MessagesPage() {
                   <div ref={bottomRef} />
                 </div>
 
-                {/* Input bar */}
+                {/* Input */}
                 <form onSubmit={handleSend} className="px-4 py-3 border-t flex gap-2" style={{ borderColor: 'var(--apple-border)' }}>
                   <input
                     className="input flex-1 py-2.5 text-sm"

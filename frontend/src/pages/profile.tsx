@@ -9,46 +9,78 @@ interface Profile { id: number; email: string; role: string; createdAt: string; 
 
 type Tab = 'info' | 'listings' | 'security';
 
+const MAX_RETRIES = 5;
+const RETRY_DELAY = 4; // seconds
+
 export default function ProfilePage() {
-  const [profile, setProfile]         = useState<Profile | null>(null);
-  const [name, setName]               = useState('');
-  const [phone, setPhone]             = useState('');
-  const [about, setAbout]             = useState('');
-  const [loading, setLoading]         = useState(true);
-  const [saving, setSaving]           = useState(false);
-  const [saveMsg, setSaveMsg]         = useState('');
-  const [saveErr, setSaveErr]         = useState('');
-  const [tab, setTab]                 = useState<Tab>('info');
-  const [oldPwd, setOldPwd]           = useState('');
-  const [newPwd, setNewPwd]           = useState('');
-  const [confirmPwd, setConfirmPwd]   = useState('');
-  const [pwdMsg, setPwdMsg]           = useState('');
-  const [pwdErr, setPwdErr]           = useState('');
-  const [deletingId, setDeletingId]   = useState<number | null>(null);
+  const [profile, setProfile]       = useState<Profile | null>(null);
+  const [name, setName]             = useState('');
+  const [phone, setPhone]           = useState('');
+  const [about, setAbout]           = useState('');
+  const [loading, setLoading]       = useState(true);
+  const [saving, setSaving]         = useState(false);
+  const [saveMsg, setSaveMsg]       = useState('');
+  const [saveErr, setSaveErr]       = useState('');
+  const [tab, setTab]               = useState<Tab>('info');
+  const [oldPwd, setOldPwd]         = useState('');
+  const [newPwd, setNewPwd]         = useState('');
+  const [confirmPwd, setConfirmPwd] = useState('');
+  const [pwdMsg, setPwdMsg]         = useState('');
+  const [pwdErr, setPwdErr]         = useState('');
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  // Retry state for when Render is waking up
+  const [retryCount, setRetryCount]     = useState(0);
+  const [countdown, setCountdown]       = useState(0);
+  const [waking, setWaking]             = useState(false);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (!token) { router.push('/login'); return; }
+
+    setLoading(true);
     api.get('/users/me')
       .then(r => {
         setProfile(r.data);
         setName(r.data.name || '');
         setPhone(r.data.phone || '');
         setAbout(r.data.about || '');
+        setWaking(false);
+        setLoading(false);
       })
       .catch((err) => {
-        // Only force-logout on 401 (token expired/invalid)
-        // For other errors (network, 500) stay on the page and show error
         if (err?.response?.status === 401) {
+          // Token expired — clear and go to login
           localStorage.removeItem('token');
           router.push('/login');
+        } else if (retryCount < MAX_RETRIES) {
+          // Backend is sleeping (Render free tier) — auto-retry with countdown
+          setWaking(true);
+          setLoading(false);
+          setCountdown(RETRY_DELAY);
+          // Tick countdown every second
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          countdownRef.current = setInterval(() => {
+            setCountdown(c => {
+              if (c <= 1) {
+                clearInterval(countdownRef.current!);
+                setRetryCount(n => n + 1); // triggers useEffect to retry
+                return 0;
+              }
+              return c - 1;
+            });
+          }, 1000);
         } else {
-          setSaveErr('Could not load profile. The server may be waking up — please refresh in a moment.');
+          // Exhausted retries
+          setWaking(false);
+          setSaveErr('Server is not responding. Please try refreshing the page in a minute.');
+          setLoading(false);
         }
-      })
-      .finally(() => setLoading(false));
-  }, []);
+      });
+
+    return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
+  }, [retryCount]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true); setSaveMsg(''); setSaveErr('');
@@ -57,13 +89,13 @@ export default function ProfilePage() {
       const r = await api.get('/users/me');
       setProfile(r.data); setName(r.data.name || ''); setPhone(r.data.phone || ''); setAbout(r.data.about || '');
       setSaveMsg('Profile updated successfully!');
-    } catch { setSaveErr('Failed to save changes. Please try again.'); }
+    } catch { setSaveErr('Failed to save. Please try again.'); }
     finally { setSaving(false); }
   };
 
   const handlePassword = async (e: React.FormEvent) => {
     e.preventDefault(); setPwdMsg(''); setPwdErr('');
-    if (newPwd !== confirmPwd) { setPwdErr('New passwords do not match.'); return; }
+    if (newPwd !== confirmPwd) { setPwdErr('Passwords do not match.'); return; }
     if (newPwd.length < 6) { setPwdErr('Password must be at least 6 characters.'); return; }
     try {
       await api.put('/users/me/password', { oldPassword: oldPwd, newPassword: newPwd });
@@ -79,27 +111,62 @@ export default function ProfilePage() {
     try {
       await api.delete(`/listings/${listingId}`);
       setProfile(prev => prev ? { ...prev, listings: (prev.listings || []).filter(l => l.id !== listingId) } : prev);
-    } catch { }
+    } catch {}
     finally { setDeletingId(null); }
   };
 
-  if (loading) return <Layout><div className="page-container py-16 text-center"><Spinner /></div></Layout>;
+  // ── Loading / waking state ─────────────────────────────────────────────
+  if (loading) return (
+    <Layout>
+      <div className="page-container py-16 text-center">
+        <Spinner />
+        <p className="mt-4 text-sm" style={{ color: 'var(--apple-mid)' }}>Loading your profile…</p>
+      </div>
+    </Layout>
+  );
+
+  if (waking) return (
+    <Layout>
+      <div className="page-container py-16 text-center">
+        <div className="text-5xl mb-5">☕</div>
+        <h2 className="font-semibold mb-2" style={{ color: 'var(--apple-dark)' }}>Server is waking up…</h2>
+        <p className="text-sm mb-1" style={{ color: 'var(--apple-mid)' }}>
+          Render's free tier sleeps when idle. Retrying in {countdown}s…
+        </p>
+        <p className="text-xs mb-6" style={{ color: 'var(--apple-mid)' }}>
+          Attempt {retryCount + 1} of {MAX_RETRIES}
+        </p>
+        <div className="w-48 h-1.5 rounded-full mx-auto overflow-hidden" style={{ background: 'var(--apple-border)' }}>
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${((RETRY_DELAY - countdown) / RETRY_DELAY) * 100}%`, background: 'var(--apple-blue)' }}
+          />
+        </div>
+        <button
+          className="btn-secondary mt-6 text-sm"
+          onClick={() => { if (countdownRef.current) clearInterval(countdownRef.current); setRetryCount(n => n + 1); }}
+        >
+          Retry now
+        </button>
+      </div>
+    </Layout>
+  );
+
   if (!profile) return (
     <Layout>
       <div className="page-container py-16 text-center">
         <div className="text-5xl mb-4">⚠️</div>
         <h2 className="font-semibold mb-2" style={{ color: 'var(--apple-dark)' }}>Could not load profile</h2>
-        <p className="text-sm mb-6" style={{ color: 'var(--apple-mid)' }}>
-          The server may be starting up. Please wait a moment and refresh.
-        </p>
-        <button className="btn-primary" onClick={() => window.location.reload()}>Refresh</button>
+        {saveErr && <p className="text-sm mb-4" style={{ color: 'var(--apple-mid)' }}>{saveErr}</p>}
+        <button className="btn-primary" onClick={() => { setRetryCount(0); setLoading(true); }}>Try Again</button>
       </div>
     </Layout>
   );
 
-  const displayName = profile.name || profile.email.split('@')[0];
-  const initials    = displayName.slice(0, 2).toUpperCase();
-  const memberSince = new Date(profile.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+  // ── Profile loaded ─────────────────────────────────────────────────────
+  const displayName  = profile.name || profile.email.split('@')[0];
+  const initials     = displayName.slice(0, 2).toUpperCase();
+  const memberSince  = new Date(profile.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
   const listingCount = (profile.listings || []).length;
 
   const TABS: { key: Tab; label: string }[] = [
@@ -111,7 +178,7 @@ export default function ProfilePage() {
   return (
     <Layout>
       <div className="page-container py-10">
-        {/* ── Profile hero ─────────────────────────────────────── */}
+        {/* ── Profile hero ──────────────────────────────────────── */}
         <div className="card overflow-hidden mb-6">
           <div className="h-24 w-full" style={{ background: 'linear-gradient(135deg, var(--apple-blue) 0%, #5ac8fa 100%)' }} />
           <div className="px-6 pb-6">
@@ -127,13 +194,13 @@ export default function ProfilePage() {
                 <p className="text-sm" style={{ color: 'var(--apple-mid)' }}>{profile.email}</p>
               </div>
               <div className="flex gap-6">
-                <Stat label="Listings" value={listingCount} />
+                <Stat label="Listings"     value={listingCount} />
                 <Stat label="Member since" value={memberSince} />
-                <Stat label="Role" value={profile.role} />
+                <Stat label="Role"         value={profile.role} />
               </div>
             </div>
 
-            {/* Tab bar */}
+            {/* Tabs */}
             <div className="flex gap-1 border-b" style={{ borderColor: 'var(--apple-border)' }}>
               {TABS.map(t => (
                 <button key={t.key} onClick={() => setTab(t.key)}
@@ -149,12 +216,12 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── Tab: Personal Info ───────────────────────────────── */}
+        {/* ── Tab: Personal Info ─────────────────────────────────── */}
         {tab === 'info' && (
           <div className="card p-6 max-w-xl">
             <h2 className="text-lg font-semibold mb-5" style={{ color: 'var(--apple-dark)' }}>Personal Information</h2>
             {saveMsg && <Alert type="success" msg={saveMsg} onDismiss={() => setSaveMsg('')} />}
-            {saveErr && <Alert type="error" msg={saveErr} onDismiss={() => setSaveErr('')} />}
+            {saveErr && <Alert type="error"   msg={saveErr} onDismiss={() => setSaveErr('')} />}
             <form onSubmit={handleSave} className="space-y-4">
               <FormField label="Full Name" htmlFor="name">
                 <input id="name" className="input" placeholder="Your full name" value={name} onChange={e => setName(e.target.value)} />
@@ -176,14 +243,12 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* ── Tab: My Listings ─────────────────────────────────── */}
+        {/* ── Tab: My Listings ──────────────────────────────────── */}
         {tab === 'listings' && (
           <div>
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-semibold" style={{ color: 'var(--apple-dark)' }}>My Listings</h2>
-              <Link href="/add-listing" className="btn-primary text-sm px-4 py-2">
-                + Add New Listing
-              </Link>
+              <Link href="/add-listing" className="btn-primary text-sm px-4 py-2">+ Add New Listing</Link>
             </div>
             {listingCount === 0 ? (
               <div className="card p-12 text-center">
@@ -222,13 +287,13 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* ── Tab: Security ────────────────────────────────────── */}
+        {/* ── Tab: Security ─────────────────────────────────────── */}
         {tab === 'security' && (
           <div className="card p-6 max-w-xl">
             <h2 className="text-lg font-semibold mb-1" style={{ color: 'var(--apple-dark)' }}>Change Password</h2>
             <p className="text-sm mb-5" style={{ color: 'var(--apple-mid)' }}>Use a strong password with letters, numbers, and symbols.</p>
             {pwdMsg && <Alert type="success" msg={pwdMsg} onDismiss={() => setPwdMsg('')} />}
-            {pwdErr && <Alert type="error" msg={pwdErr} onDismiss={() => setPwdErr('')} />}
+            {pwdErr && <Alert type="error"   msg={pwdErr} onDismiss={() => setPwdErr('')} />}
             <form onSubmit={handlePassword} className="space-y-4">
               <FormField label="Current Password" htmlFor="oldPwd">
                 <input id="oldPwd" type="password" className="input" value={oldPwd} onChange={e => setOldPwd(e.target.value)} required />
@@ -248,6 +313,7 @@ export default function ProfilePage() {
   );
 }
 
+// ── Small reusable components ──────────────────────────────────────────────
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="text-center">
@@ -267,11 +333,11 @@ function FormField({ label, htmlFor, children }: { label: string; htmlFor: strin
 }
 
 function Alert({ type, msg, onDismiss }: { type: 'success' | 'error'; msg: string; onDismiss: () => void }) {
-  const isSuccess = type === 'success';
+  const ok = type === 'success';
   return (
     <div className="flex items-center justify-between gap-3 p-3 rounded-xl mb-4 text-sm"
-         style={{ background: isSuccess ? 'rgba(48,209,88,0.12)' : 'rgba(255,59,48,0.1)', color: isSuccess ? '#25a244' : 'var(--apple-red)' }}>
-      <span>{isSuccess ? '✓' : '⚠'} {msg}</span>
+         style={{ background: ok ? 'rgba(48,209,88,0.12)' : 'rgba(255,59,48,0.1)', color: ok ? '#25a244' : 'var(--apple-red)' }}>
+      <span>{ok ? '✓' : '⚠'} {msg}</span>
       <button onClick={onDismiss} className="flex-shrink-0 opacity-60 hover:opacity-100">✕</button>
     </div>
   );
