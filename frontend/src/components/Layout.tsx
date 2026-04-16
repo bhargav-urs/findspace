@@ -175,7 +175,7 @@ export default function Layout({ children }: Props) {
                   )}
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="hidden md:flex items-center gap-2">
                   <Link href="/login" className="btn-secondary text-sm py-1.5 px-4">Sign In</Link>
                   <Link href="/register" className="btn-primary text-sm py-1.5 px-4">Sign Up</Link>
                 </div>
