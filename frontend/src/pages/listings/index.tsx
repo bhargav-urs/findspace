@@ -44,14 +44,37 @@ export default function ListingsPage() {
         <div className="card p-5 mb-8">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1 relative">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--apple-mid)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+                style={{ left: '14px', color: 'var(--apple-mid)' }}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
               </svg>
-              <input className="input pl-10" placeholder="Search listings…" value={search} onChange={e => setSearch(e.target.value)} />
+              <input
+                className="input"
+                style={{ paddingLeft: '42px' }}
+                placeholder="Search listings…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
             </div>
             <div className="relative sm:w-44">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none" style={{ color: 'var(--apple-mid)' }}>Max $</span>
-              <input className="input pl-10" type="number" placeholder="Any rent" value={maxRent} onChange={e => setMaxRent(e.target.value)} />
+              <span
+                className="absolute top-1/2 -translate-y-1/2 text-sm font-medium pointer-events-none select-none"
+                style={{ left: '14px', color: 'var(--apple-mid)' }}
+              >
+                Max $
+              </span>
+              <input
+                className="input"
+                type="number"
+                min="0"
+                style={{ paddingLeft: '52px' }}
+                placeholder=""
+                value={maxRent}
+                onChange={e => setMaxRent(e.target.value)}
+              />
             </div>
             <select className="input sm:w-44" value={sort} onChange={e => setSort(e.target.value as SortKey)}
               style={{ appearance: 'none', cursor: 'pointer' }}>

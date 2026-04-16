@@ -37,7 +37,16 @@ export default function ProfilePage() {
         setPhone(r.data.phone || '');
         setAbout(r.data.about || '');
       })
-      .catch(() => router.push('/login'))
+      .catch((err) => {
+        // Only force-logout on 401 (token expired/invalid)
+        // For other errors (network, 500) stay on the page and show error
+        if (err?.response?.status === 401) {
+          localStorage.removeItem('token');
+          router.push('/login');
+        } else {
+          setSaveErr('Could not load profile. The server may be waking up — please refresh in a moment.');
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -75,7 +84,18 @@ export default function ProfilePage() {
   };
 
   if (loading) return <Layout><div className="page-container py-16 text-center"><Spinner /></div></Layout>;
-  if (!profile) return null;
+  if (!profile) return (
+    <Layout>
+      <div className="page-container py-16 text-center">
+        <div className="text-5xl mb-4">⚠️</div>
+        <h2 className="font-semibold mb-2" style={{ color: 'var(--apple-dark)' }}>Could not load profile</h2>
+        <p className="text-sm mb-6" style={{ color: 'var(--apple-mid)' }}>
+          The server may be starting up. Please wait a moment and refresh.
+        </p>
+        <button className="btn-primary" onClick={() => window.location.reload()}>Refresh</button>
+      </div>
+    </Layout>
+  );
 
   const displayName = profile.name || profile.email.split('@')[0];
   const initials    = displayName.slice(0, 2).toUpperCase();
