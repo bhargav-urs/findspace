@@ -29,11 +29,18 @@ public class Listing {
 
     /**
      * Whether this listing is publicly visible.
-     * Listings with associated conversations cannot be hard-deleted —
-     * they are soft-deleted by setting active = false instead.
+     *
+     * Uses nullable Boolean (wrapper class, NOT primitive boolean) so that
+     * Hibernate's ddl-auto=update can safely ADD this column to an existing
+     * populated table.  A primitive 'boolean' with nullable=false makes
+     * Hibernate generate:  ALTER TABLE listings ADD COLUMN active boolean NOT NULL
+     * which PostgreSQL rejects because existing rows have no value.
+     *
+     * A nullable column allows existing rows to get NULL, which isActive()
+     * treats as true (active).  New listings are set to Boolean.TRUE explicitly.
      */
-    @Column(nullable = false)
-    private boolean active = true;
+    @Column(name = "active")
+    private Boolean active = Boolean.TRUE;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id")
@@ -42,8 +49,12 @@ public class Listing {
     public Listing() {}
 
     public Listing(String title, String description, BigDecimal rent, String address, User owner) {
-        this.title = title; this.description = description;
-        this.rent = rent; this.address = address; this.owner = owner;
+        this.title = title;
+        this.description = description;
+        this.rent = rent;
+        this.address = address;
+        this.owner = owner;
+        this.active = Boolean.TRUE;
     }
 
     public Long getId()                     { return id; }
@@ -58,8 +69,11 @@ public class Listing {
     public void setAddress(String a)        { this.address = a; }
     public Instant getCreatedAt()           { return createdAt; }
     public void setCreatedAt(Instant c)     { this.createdAt = c; }
-    public boolean isActive()               { return active; }
+
+    /** Null-safe — existing rows without a value are treated as active (true). */
+    public boolean isActive()               { return active == null || active; }
     public void setActive(boolean active)   { this.active = active; }
+
     public User getOwner()                  { return owner; }
     public void setOwner(User owner)        { this.owner = owner; }
 }
