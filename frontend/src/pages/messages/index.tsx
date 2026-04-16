@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import api from '../../lib/api';
 import Layout from '../../components/Layout';
 
@@ -169,18 +170,26 @@ export default function MessagesPage() {
                 {/* Header */}
                 <div className="px-5 py-3.5 border-b flex items-center gap-3"
                      style={{ borderColor: 'var(--apple-border)' }}>
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
-                       style={{ background: `hsl(${((selectedConv?.otherUserId || 1) * 83) % 360}, 55%, 55%)` }}>
-                    {otherInitials}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: 'var(--apple-dark)' }}>{otherName}</p>
-                    {selectedConv?.listingId && (
-                      <p className="text-xs" style={{ color: 'var(--apple-mid)' }}>
-                        Re: Listing #{selectedConv.listingId}
+                  <Link
+                    href={`/users/${selectedConv?.otherUserId}`}
+                    className="flex items-center gap-3 group"
+                    title="View profile"
+                  >
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold transition-opacity group-hover:opacity-80"
+                         style={{ background: `hsl(${((selectedConv?.otherUserId || 1) * 83) % 360}, 55%, 55%)` }}>
+                      {otherInitials}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold group-hover:underline" style={{ color: 'var(--apple-dark)' }}>
+                        {otherName}
                       </p>
-                    )}
-                  </div>
+                      {selectedConv?.listingId && (
+                        <p className="text-xs" style={{ color: 'var(--apple-mid)' }}>
+                          Re: Listing #{selectedConv.listingId}
+                        </p>
+                      )}
+                    </div>
+                  </Link>
                 </div>
 
                 {/* Messages */}

@@ -36,6 +36,44 @@ public class UserController {
         this.listingService = listingService;
     }
 
+    /**
+     * Get any user's public profile by ID.
+     * Returns read-only info — no sensitive data beyond what a tenant/landlord
+     * would expect to share on a rental platform.
+     * Requires authentication (must be logged in) but no ownership check.
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getPublicProfile(@PathVariable Long id) {
+        User user = userService.findById(id).orElse(null);
+        if (user == null) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "User not found");
+            return ResponseEntity.status(404).body(err);
+        }
+        List<Listing> theirListings = listingService.findByOwner(user);
+        List<Map<String, Object>> listingMaps = theirListings.stream().map(l -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("id",          l.getId());
+            m.put("title",       l.getTitle());
+            m.put("description", l.getDescription());
+            m.put("rent",        l.getRent());
+            m.put("address",     l.getAddress() != null ? l.getAddress() : "");
+            m.put("createdAt",   l.getCreatedAt());
+            return m;
+        }).collect(Collectors.toList());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("id",        user.getId());
+        response.put("email",     user.getEmail());
+        response.put("name",      user.getName()  != null ? user.getName()  : "");
+        response.put("phone",     user.getPhone() != null ? user.getPhone() : "");
+        response.put("about",     user.getAbout() != null ? user.getAbout() : "");
+        response.put("createdAt", user.getCreatedAt());
+        response.put("role",      user.getRole());
+        response.put("listings",  listingMaps);
+        return ResponseEntity.ok(response);
+    }
+
     /** Get the current authenticated user's profile + their listings. */
     @GetMapping("/me")
     public ResponseEntity<?> getMe(Principal principal) {
