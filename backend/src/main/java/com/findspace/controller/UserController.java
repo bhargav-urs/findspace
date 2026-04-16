@@ -1,114 +1,120 @@
 package com.findspace.controller;
 
+import com.findspace.entity.Listing;
 import com.findspace.entity.User;
+import com.findspace.service.ListingService;
 import com.findspace.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Controller for accessing and updating user profile information.
+ *
+ * IMPORTANT: We use HashMap instead of Map.of() throughout this controller.
+ * Map.of() throws NullPointerException if ANY value is null.
+ * New users have name, phone, and about all null — this was causing
+ * every call to /api/users/me to crash with a 500 error.
  */
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
+
     private final UserService userService;
-    private final com.findspace.service.ListingService listingService;
+    private final ListingService listingService;
 
     @Autowired
-    public UserController(UserService userService, com.findspace.service.ListingService listingService) {
+    public UserController(UserService userService, ListingService listingService) {
         this.userService = userService;
         this.listingService = listingService;
     }
 
-    /**
-     * Get the current authenticated user's profile.
-     */
+    /** Get the current authenticated user's profile + their listings. */
     @GetMapping("/me")
     public ResponseEntity<?> getMe(Principal principal) {
         User user = userService.findByEmail(principal.getName()).orElseThrow();
-        // Fetch the user's own listings
-        java.util.List<com.findspace.entity.Listing> myListings = listingService.findByOwner(user);
-        java.util.List<java.util.Map<String, Object>> listingMaps = myListings.stream().map(listing -> {
-            java.util.Map<String, Object> map = new java.util.HashMap<>();
-            map.put("id", listing.getId());
-            map.put("title", listing.getTitle());
-            map.put("description", listing.getDescription());
-            map.put("rent", listing.getRent());
-            map.put("address", listing.getAddress());
-            map.put("createdAt", listing.getCreatedAt());
-            return map;
-        }).collect(java.util.stream.Collectors.toList());
-        return ResponseEntity.ok(java.util.Map.of(
-                "id", user.getId(),
-                "email", user.getEmail(),
-                "role", user.getRole(),
-                "createdAt", user.getCreatedAt(),
-                "name", user.getName(),
-                "phone", user.getPhone(),
-                "about", user.getAbout(),
-                "listings", listingMaps
-        ));
+        return ResponseEntity.ok(buildUserResponse(user));
     }
 
-    /**
-     * Update the current authenticated user's profile.  Accepts any combination of
-     * name, phone, or about fields.
-     */
+    /** Update name, phone, about for the current user. */
     @PutMapping("/me")
-    public ResponseEntity<?> updateMe(Principal principal, @RequestBody java.util.Map<String, String> payload) {
+    public ResponseEntity<?> updateMe(Principal principal,
+                                      @RequestBody Map<String, String> payload) {
         User user = userService.findByEmail(principal.getName()).orElseThrow();
-        String name = payload.get("name");
-        String phone = payload.get("phone");
-        String about = payload.get("about");
-        User updated = userService.updateProfile(user, name, phone, about);
-        // include listings in response as well
-        java.util.List<com.findspace.entity.Listing> myListings = listingService.findByOwner(updated);
-        java.util.List<java.util.Map<String, Object>> listingMaps = myListings.stream().map(listing -> {
-            java.util.Map<String, Object> map = new java.util.HashMap<>();
-            map.put("id", listing.getId());
-            map.put("title", listing.getTitle());
-            map.put("description", listing.getDescription());
-            map.put("rent", listing.getRent());
-            map.put("address", listing.getAddress());
-            map.put("createdAt", listing.getCreatedAt());
-            return map;
-        }).collect(java.util.stream.Collectors.toList());
-        return ResponseEntity.ok(java.util.Map.of(
-                "id", updated.getId(),
-                "email", updated.getEmail(),
-                "role", updated.getRole(),
-                "createdAt", updated.getCreatedAt(),
-                "name", updated.getName(),
-                "phone", updated.getPhone(),
-                "about", updated.getAbout(),
-                "listings", listingMaps
-        ));
+        User updated = userService.updateProfile(
+                user,
+                payload.get("name"),
+                payload.get("phone"),
+                payload.get("about")
+        );
+        return ResponseEntity.ok(buildUserResponse(updated));
     }
 
-    /**
-     * Change the current user's password.  The request body should include
-     * "oldPassword" and "newPassword".  If the old password does not match
-     * the current password, a 400 Bad Request is returned.
-     */
+    /** Change password — requires old password verification. */
     @PutMapping("/me/password")
-    public ResponseEntity<?> changePassword(Principal principal, @RequestBody java.util.Map<String, String> payload) {
+    public ResponseEntity<?> changePassword(Principal principal,
+                                            @RequestBody Map<String, String> payload) {
         User user = userService.findByEmail(principal.getName()).orElseThrow();
         String oldPassword = payload.get("oldPassword");
         String newPassword = payload.get("newPassword");
+
         if (oldPassword == null || newPassword == null || newPassword.isBlank()) {
-            return ResponseEntity.badRequest().body(java.util.Map.of("error", "Old and new password are required"));
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "Old and new password are required");
+            return ResponseEntity.badRequest().body(err);
         }
         try {
             userService.changePassword(user, oldPassword, newPassword);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST).body(java.util.Map.of("error", e.getMessage()));
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
         }
-        return ResponseEntity.ok(java.util.Map.of("message", "Password changed successfully"));
+        Map<String, Object> ok = new HashMap<>();
+        ok.put("message", "Password changed successfully");
+        return ResponseEntity.ok(ok);
+    }
+
+    // ── private helper ───────────────────────────────────────────────────────
+
+    /**
+     * Build a safe response map for a User.
+     * Uses HashMap (NOT Map.of) so null fields don't cause NullPointerException.
+     * Null profile fields are returned as empty strings so the frontend can
+     * render them without crashing.
+     */
+    private Map<String, Object> buildUserResponse(User user) {
+        List<Listing> myListings = listingService.findByOwner(user);
+
+        List<Map<String, Object>> listingMaps = myListings.stream().map(l -> {
+            Map<String, Object> m = new HashMap<>();
+            m.put("id",          l.getId());
+            m.put("title",       l.getTitle());
+            m.put("description", l.getDescription());
+            m.put("rent",        l.getRent());
+            m.put("address",     l.getAddress() != null ? l.getAddress() : "");
+            m.put("createdAt",   l.getCreatedAt());
+            return m;
+        }).collect(Collectors.toList());
+
+        // Use HashMap — allows null values unlike Map.of()
+        Map<String, Object> response = new HashMap<>();
+        response.put("id",        user.getId());
+        response.put("email",     user.getEmail());
+        response.put("role",      user.getRole());
+        response.put("createdAt", user.getCreatedAt());
+        // Null-safe: return empty string if profile fields not yet filled in
+        response.put("name",      user.getName()  != null ? user.getName()  : "");
+        response.put("phone",     user.getPhone() != null ? user.getPhone() : "");
+        response.put("about",     user.getAbout() != null ? user.getAbout() : "");
+        response.put("listings",  listingMaps);
+        return response;
     }
 }

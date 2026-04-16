@@ -8,16 +8,32 @@ interface Conversation {
   listingId?: number | null;
   lastMessage?: { content: string; senderId: number; sentAt: string; } | null;
 }
-interface Message { id: number; senderId: number; senderEmail: string; content: string; sentAt: string; }
+interface Message {
+  id: number; senderId: number; senderEmail: string; content: string; sentAt: string;
+}
 
-/** Decode email from JWT stored in localStorage — instant, no API call needed.
- *  JWT payload is base64url-encoded JSON. The backend stores email as the 'sub' claim. */
-function getEmailFromToken(): string {
+/**
+ * Get current user's email — tries three sources in order:
+ * 1. localStorage.userEmail  (set explicitly on login — most reliable)
+ * 2. JWT token sub claim     (fallback decode)
+ * 3. Empty string            (gives up gracefully)
+ */
+function getMyEmail(): string {
   try {
+    // Source 1: set directly on login
+    const stored = localStorage.getItem('userEmail');
+    if (stored && stored.length > 0) return stored;
+
+    // Source 2: decode JWT — sub claim contains email
     const token = localStorage.getItem('token');
     if (!token) return '';
-    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return payload.sub || '';
+    const parts = token.split('.');
+    if (parts.length !== 3) return '';
+    // base64url → base64 → JSON
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded  = base64 + '=='.slice(0, (4 - base64.length % 4) % 4);
+    const payload = JSON.parse(atob(padded));
+    return (payload.sub || '').toLowerCase().trim();
   } catch {
     return '';
   }
@@ -31,12 +47,11 @@ export default function MessagesPage() {
   const [loading, setLoading]             = useState(true);
   const [sending, setSending]             = useState(false);
   const [error, setError]                 = useState<string | null>(null);
-  // Read email directly from the JWT — available instantly on page load
-  const [myEmail]                         = useState<string>(() =>
-    typeof window !== 'undefined' ? getEmailFromToken() : ''
-  );
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const router    = useRouter();
+  // Resolved immediately from localStorage — no API call needed
+  const myEmail    = typeof window !== 'undefined' ? getMyEmail() : '';
+  const myInitials = myEmail.slice(0, 2).toUpperCase();
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const router     = useRouter();
 
   useEffect(() => {
     if (typeof window !== 'undefined' && !localStorage.getItem('token')) {
@@ -66,8 +81,8 @@ export default function MessagesPage() {
     try {
       await api.post('/messages/start', {
         receiverId: String(conv?.otherUserId),
-        listingId: conv?.listingId ? String(conv.listingId) : undefined,
-        content: newMessage,
+        listingId:  conv?.listingId ? String(conv.listingId) : undefined,
+        content:    newMessage,
       });
       const r = await api.get(`/messages/conversations/${selectedId}`);
       setMessages(r.data);
@@ -86,7 +101,6 @@ export default function MessagesPage() {
   const selectedConv  = conversations.find(c => c.id === selectedId);
   const otherName     = selectedConv ? selectedConv.otherUserEmail.split('@')[0] : '';
   const otherInitials = otherName.slice(0, 2).toUpperCase();
-  const myInitials    = myEmail.slice(0, 2).toUpperCase();
 
   return (
     <Layout>
@@ -95,9 +109,11 @@ export default function MessagesPage() {
 
         <div className="card overflow-hidden" style={{ height: '72vh', display: 'flex' }}>
 
-          {/* ── Sidebar ─────────────────────────────────────────── */}
-          <div className="flex-shrink-0 border-r flex flex-col" style={{ width: '260px', borderColor: 'var(--apple-border)' }}>
-            <div className="px-4 py-3 border-b text-sm font-semibold" style={{ borderColor: 'var(--apple-border)', color: 'var(--apple-mid)' }}>
+          {/* ── Sidebar ─────────────────────────────────── */}
+          <div className="flex-shrink-0 border-r flex flex-col"
+               style={{ width: '260px', borderColor: 'var(--apple-border)' }}>
+            <div className="px-4 py-3 border-b text-sm font-semibold"
+                 style={{ borderColor: 'var(--apple-border)', color: 'var(--apple-mid)' }}>
               Conversations
             </div>
             <div className="flex-1 overflow-y-auto">
@@ -111,9 +127,7 @@ export default function MessagesPage() {
                   No conversations yet
                 </div>
               ) : conversations.map(conv => (
-                <button
-                  key={conv.id}
-                  onClick={() => setSelectedId(conv.id)}
+                <button key={conv.id} onClick={() => setSelectedId(conv.id)}
                   className="w-full text-left p-4 flex items-center gap-3 border-b transition-colors"
                   style={{
                     borderColor: 'var(--apple-border)',
@@ -122,10 +136,8 @@ export default function MessagesPage() {
                   onMouseEnter={e => { if (conv.id !== selectedId) e.currentTarget.style.background = 'var(--apple-gray)'; }}
                   onMouseLeave={e => { if (conv.id !== selectedId) e.currentTarget.style.background = 'transparent'; }}
                 >
-                  <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
-                    style={{ background: `hsl(${(conv.otherUserId * 83) % 360}, 55%, 55%)` }}
-                  >
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
+                       style={{ background: `hsl(${(conv.otherUserId * 83) % 360}, 55%, 55%)` }}>
                     {conv.otherUserEmail.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -143,28 +155,30 @@ export default function MessagesPage() {
             </div>
           </div>
 
-          {/* ── Chat area ───────────────────────────────────────── */}
+          {/* ── Chat area ───────────────────────────────── */}
           <div className="flex-1 flex flex-col min-w-0">
             {!selectedId ? (
-              <div className="flex-1 flex flex-col items-center justify-center" style={{ color: 'var(--apple-mid)' }}>
+              <div className="flex-1 flex flex-col items-center justify-center"
+                   style={{ color: 'var(--apple-mid)' }}>
                 <div className="text-5xl mb-3">💬</div>
                 <p className="font-medium">Select a conversation</p>
                 <p className="text-sm mt-1">Choose someone from the left</p>
               </div>
             ) : (
               <>
-                {/* Chat header */}
-                <div className="px-5 py-3.5 border-b flex items-center gap-3" style={{ borderColor: 'var(--apple-border)' }}>
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
-                    style={{ background: `hsl(${((selectedConv?.otherUserId || 1) * 83) % 360}, 55%, 55%)` }}
-                  >
+                {/* Header */}
+                <div className="px-5 py-3.5 border-b flex items-center gap-3"
+                     style={{ borderColor: 'var(--apple-border)' }}>
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                       style={{ background: `hsl(${((selectedConv?.otherUserId || 1) * 83) % 360}, 55%, 55%)` }}>
                     {otherInitials}
                   </div>
                   <div>
                     <p className="text-sm font-semibold" style={{ color: 'var(--apple-dark)' }}>{otherName}</p>
                     {selectedConv?.listingId && (
-                      <p className="text-xs" style={{ color: 'var(--apple-mid)' }}>Re: Listing #{selectedConv.listingId}</p>
+                      <p className="text-xs" style={{ color: 'var(--apple-mid)' }}>
+                        Re: Listing #{selectedConv.listingId}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -174,50 +188,43 @@ export default function MessagesPage() {
                   {error && (
                     <p className="text-center text-sm py-2" style={{ color: 'var(--apple-red)' }}>{error}</p>
                   )}
-
                   {messages.map(msg => {
-                    // Compare senderEmail against email decoded from JWT — works instantly on load
-                    const isMe = myEmail !== '' && msg.senderEmail === myEmail;
+                    // Compare lowercase emails — set from localStorage on login
+                    const isMe = myEmail !== '' &&
+                      msg.senderEmail.toLowerCase().trim() === myEmail;
 
                     return (
-                      <div key={msg.id} className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      <div key={msg.id}
+                           className={`flex items-end gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
 
-                        {/* Other person avatar — left side only */}
+                        {/* Their avatar — left side */}
                         {!isMe && (
-                          <div
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
-                            style={{ background: `hsl(${((selectedConv?.otherUserId || 1) * 83) % 360}, 55%, 55%)` }}
-                          >
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
+                               style={{ background: `hsl(${((selectedConv?.otherUserId || 1) * 83) % 360}, 55%, 55%)` }}>
                             {otherInitials}
                           </div>
                         )}
 
                         <div className={`max-w-[70%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                          <div
-                            className="px-4 py-2.5 rounded-2xl text-sm leading-relaxed"
-                            style={{
-                              background:              isMe ? 'var(--apple-blue)' : '#e9e9eb',
-                              color:                   isMe ? '#fff' : 'var(--apple-dark)',
-                              borderBottomRightRadius: isMe ? '4px' : '18px',
-                              borderBottomLeftRadius:  isMe ? '18px' : '4px',
-                            }}
-                          >
+                          <div className="px-4 py-2.5 rounded-2xl text-sm leading-relaxed"
+                               style={{
+                                 background:              isMe ? 'var(--apple-blue)' : '#e9e9eb',
+                                 color:                   isMe ? '#fff' : 'var(--apple-dark)',
+                                 borderBottomRightRadius: isMe ? '4px' : '18px',
+                                 borderBottomLeftRadius:  isMe ? '18px' : '4px',
+                               }}>
                             {msg.content}
                           </div>
-                          <p
-                            className={`text-xs px-1 mt-1 ${isMe ? 'text-right' : 'text-left'}`}
-                            style={{ color: 'var(--apple-mid)' }}
-                          >
+                          <p className={`text-xs px-1 mt-1 ${isMe ? 'text-right' : 'text-left'}`}
+                             style={{ color: 'var(--apple-mid)' }}>
                             {new Date(msg.sentAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                           </p>
                         </div>
 
-                        {/* My avatar — right side only */}
+                        {/* My avatar — right side */}
                         {isMe && (
-                          <div
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
-                            style={{ background: 'var(--apple-blue)' }}
-                          >
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
+                               style={{ background: 'var(--apple-blue)' }}>
                             {myInitials}
                           </div>
                         )}
@@ -228,21 +235,17 @@ export default function MessagesPage() {
                 </div>
 
                 {/* Input */}
-                <form onSubmit={handleSend} className="px-4 py-3 border-t flex gap-2" style={{ borderColor: 'var(--apple-border)' }}>
-                  <input
-                    className="input flex-1 py-2.5 text-sm"
-                    placeholder="Type a message…"
-                    value={newMessage}
-                    onChange={e => setNewMessage(e.target.value)}
-                  />
-                  <button
-                    type="submit"
-                    className="btn-primary px-4 py-2.5"
-                    disabled={sending || !newMessage.trim()}
-                  >
+                <form onSubmit={handleSend}
+                      className="px-4 py-3 border-t flex gap-2"
+                      style={{ borderColor: 'var(--apple-border)' }}>
+                  <input className="input flex-1 py-2.5 text-sm" placeholder="Type a message…"
+                    value={newMessage} onChange={e => setNewMessage(e.target.value)} />
+                  <button type="submit" className="btn-primary px-4 py-2.5"
+                          disabled={sending || !newMessage.trim()}>
                     {sending ? '…' : (
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
                       </svg>
                     )}
                   </button>

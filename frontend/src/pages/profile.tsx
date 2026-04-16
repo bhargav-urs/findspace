@@ -1,16 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import api from '../lib/api';
 import Layout from '../components/Layout';
 
-interface UserListing { id: number; title: string; description: string; rent: number; address?: string; createdAt: string; }
-interface Profile { id: number; email: string; role: string; createdAt: string; name?: string; phone?: string; about?: string; listings?: UserListing[]; }
+interface UserListing {
+  id: number; title: string; description: string;
+  rent: number; address?: string; createdAt: string;
+}
+interface Profile {
+  id: number; email: string; role: string; createdAt: string;
+  name?: string; phone?: string; about?: string; listings?: UserListing[];
+}
 
 type Tab = 'info' | 'listings' | 'security';
-
-const MAX_RETRIES = 5;
-const RETRY_DELAY = 4; // seconds
 
 export default function ProfilePage() {
   const [profile, setProfile]       = useState<Profile | null>(null);
@@ -18,6 +21,7 @@ export default function ProfilePage() {
   const [phone, setPhone]           = useState('');
   const [about, setAbout]           = useState('');
   const [loading, setLoading]       = useState(true);
+  const [loadErr, setLoadErr]       = useState('');
   const [saving, setSaving]         = useState(false);
   const [saveMsg, setSaveMsg]       = useState('');
   const [saveErr, setSaveErr]       = useState('');
@@ -28,66 +32,42 @@ export default function ProfilePage() {
   const [pwdMsg, setPwdMsg]         = useState('');
   const [pwdErr, setPwdErr]         = useState('');
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  // Retry state for when Render is waking up
-  const [retryCount, setRetryCount]     = useState(0);
-  const [countdown, setCountdown]       = useState(0);
-  const [waking, setWaking]             = useState(false);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const router = useRouter();
 
-  useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    if (!token) { router.push('/login'); return; }
-
-    setLoading(true);
+  const loadProfile = () => {
+    setLoading(true); setLoadErr('');
     api.get('/users/me')
       .then(r => {
         setProfile(r.data);
         setName(r.data.name || '');
         setPhone(r.data.phone || '');
         setAbout(r.data.about || '');
-        setWaking(false);
-        setLoading(false);
       })
-      .catch((err) => {
+      .catch(err => {
         if (err?.response?.status === 401) {
-          // Token expired — clear and go to login
           localStorage.removeItem('token');
+          localStorage.removeItem('userEmail');
           router.push('/login');
-        } else if (retryCount < MAX_RETRIES) {
-          // Backend is sleeping (Render free tier) — auto-retry with countdown
-          setWaking(true);
-          setLoading(false);
-          setCountdown(RETRY_DELAY);
-          // Tick countdown every second
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          countdownRef.current = setInterval(() => {
-            setCountdown(c => {
-              if (c <= 1) {
-                clearInterval(countdownRef.current!);
-                setRetryCount(n => n + 1); // triggers useEffect to retry
-                return 0;
-              }
-              return c - 1;
-            });
-          }, 1000);
         } else {
-          // Exhausted retries
-          setWaking(false);
-          setSaveErr('Server is not responding. Please try refreshing the page in a minute.');
-          setLoading(false);
+          setLoadErr('Could not load profile. Check your internet and try again.');
         }
-      });
+      })
+      .finally(() => setLoading(false));
+  };
 
-    return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
-  }, [retryCount]);
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) { router.push('/login'); return; }
+    loadProfile();
+  }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true); setSaveMsg(''); setSaveErr('');
     try {
       await api.put('/users/me', { name, phone, about });
       const r = await api.get('/users/me');
-      setProfile(r.data); setName(r.data.name || ''); setPhone(r.data.phone || ''); setAbout(r.data.about || '');
+      setProfile(r.data);
+      setName(r.data.name || ''); setPhone(r.data.phone || ''); setAbout(r.data.about || '');
       setSaveMsg('Profile updated successfully!');
     } catch { setSaveErr('Failed to save. Please try again.'); }
     finally { setSaving(false); }
@@ -110,60 +90,37 @@ export default function ProfilePage() {
     setDeletingId(listingId);
     try {
       await api.delete(`/listings/${listingId}`);
-      setProfile(prev => prev ? { ...prev, listings: (prev.listings || []).filter(l => l.id !== listingId) } : prev);
+      setProfile(prev => prev
+        ? { ...prev, listings: (prev.listings || []).filter(l => l.id !== listingId) }
+        : prev);
     } catch {}
     finally { setDeletingId(null); }
   };
 
-  // ── Loading / waking state ─────────────────────────────────────────────
+  // ── States ──────────────────────────────────────────────────────────────
   if (loading) return (
     <Layout>
       <div className="page-container py-16 text-center">
-        <Spinner />
+        <div className="w-8 h-8 border-2 rounded-full animate-spin mx-auto"
+             style={{ borderColor: 'var(--apple-border)', borderTopColor: 'var(--apple-blue)' }} />
         <p className="mt-4 text-sm" style={{ color: 'var(--apple-mid)' }}>Loading your profile…</p>
       </div>
     </Layout>
   );
 
-  if (waking) return (
-    <Layout>
-      <div className="page-container py-16 text-center">
-        <div className="text-5xl mb-5">☕</div>
-        <h2 className="font-semibold mb-2" style={{ color: 'var(--apple-dark)' }}>Server is waking up…</h2>
-        <p className="text-sm mb-1" style={{ color: 'var(--apple-mid)' }}>
-          Render's free tier sleeps when idle. Retrying in {countdown}s…
-        </p>
-        <p className="text-xs mb-6" style={{ color: 'var(--apple-mid)' }}>
-          Attempt {retryCount + 1} of {MAX_RETRIES}
-        </p>
-        <div className="w-48 h-1.5 rounded-full mx-auto overflow-hidden" style={{ background: 'var(--apple-border)' }}>
-          <div
-            className="h-full rounded-full transition-all"
-            style={{ width: `${((RETRY_DELAY - countdown) / RETRY_DELAY) * 100}%`, background: 'var(--apple-blue)' }}
-          />
-        </div>
-        <button
-          className="btn-secondary mt-6 text-sm"
-          onClick={() => { if (countdownRef.current) clearInterval(countdownRef.current); setRetryCount(n => n + 1); }}
-        >
-          Retry now
-        </button>
-      </div>
-    </Layout>
-  );
-
-  if (!profile) return (
+  if (loadErr || !profile) return (
     <Layout>
       <div className="page-container py-16 text-center">
         <div className="text-5xl mb-4">⚠️</div>
         <h2 className="font-semibold mb-2" style={{ color: 'var(--apple-dark)' }}>Could not load profile</h2>
-        {saveErr && <p className="text-sm mb-4" style={{ color: 'var(--apple-mid)' }}>{saveErr}</p>}
-        <button className="btn-primary" onClick={() => { setRetryCount(0); setLoading(true); }}>Try Again</button>
+        <p className="text-sm mb-6" style={{ color: 'var(--apple-mid)' }}>
+          {loadErr || 'Something went wrong. Please try again.'}
+        </p>
+        <button className="btn-primary" onClick={loadProfile}>Try Again</button>
       </div>
     </Layout>
   );
 
-  // ── Profile loaded ─────────────────────────────────────────────────────
   const displayName  = profile.name || profile.email.split('@')[0];
   const initials     = displayName.slice(0, 2).toUpperCase();
   const memberSince  = new Date(profile.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
@@ -178,19 +135,18 @@ export default function ProfilePage() {
   return (
     <Layout>
       <div className="page-container py-10">
-        {/* ── Profile hero ──────────────────────────────────────── */}
+        {/* ── Profile hero ──────────────────────────────── */}
         <div className="card overflow-hidden mb-6">
-          <div className="h-24 w-full" style={{ background: 'linear-gradient(135deg, var(--apple-blue) 0%, #5ac8fa 100%)' }} />
+          <div className="h-24 w-full"
+               style={{ background: 'linear-gradient(135deg, var(--apple-blue) 0%, #5ac8fa 100%)' }} />
           <div className="px-6 pb-6">
             <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-12 mb-5">
-              <div
-                className="w-24 h-24 rounded-2xl flex items-center justify-center text-white text-3xl font-bold border-4 border-white flex-shrink-0"
-                style={{ background: `hsl(${(profile.id * 83) % 360}, 55%, 55%)`, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
-              >
+              <div className="w-24 h-24 rounded-2xl flex items-center justify-center text-white text-3xl font-bold border-4 border-white flex-shrink-0"
+                   style={{ background: `hsl(${(profile.id * 83) % 360}, 55%, 55%)`, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}>
                 {initials}
               </div>
               <div className="flex-1 sm:mb-1">
-                <h1 className="text-2xl font-bold" style={{ color: 'var(--apple-dark)', fontSize: '1.5rem' }}>{displayName}</h1>
+                <h1 className="font-bold" style={{ color: 'var(--apple-dark)', fontSize: '1.5rem' }}>{displayName}</h1>
                 <p className="text-sm" style={{ color: 'var(--apple-mid)' }}>{profile.email}</p>
               </div>
               <div className="flex gap-6">
@@ -199,8 +155,7 @@ export default function ProfilePage() {
                 <Stat label="Role"         value={profile.role} />
               </div>
             </div>
-
-            {/* Tabs */}
+            {/* Tab bar */}
             <div className="flex gap-1 border-b" style={{ borderColor: 'var(--apple-border)' }}>
               {TABS.map(t => (
                 <button key={t.key} onClick={() => setTab(t.key)}
@@ -208,7 +163,8 @@ export default function ProfilePage() {
                   style={{ color: tab === t.key ? 'var(--apple-blue)' : 'var(--apple-mid)' }}>
                   {t.label}
                   {tab === t.key && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: 'var(--apple-blue)' }} />
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full"
+                          style={{ background: 'var(--apple-blue)' }} />
                   )}
                 </button>
               ))}
@@ -216,26 +172,31 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── Tab: Personal Info ─────────────────────────────────── */}
+        {/* ── Personal Info ─────────────────────────────── */}
         {tab === 'info' && (
           <div className="card p-6 max-w-xl">
             <h2 className="text-lg font-semibold mb-5" style={{ color: 'var(--apple-dark)' }}>Personal Information</h2>
             {saveMsg && <Alert type="success" msg={saveMsg} onDismiss={() => setSaveMsg('')} />}
             {saveErr && <Alert type="error"   msg={saveErr} onDismiss={() => setSaveErr('')} />}
             <form onSubmit={handleSave} className="space-y-4">
-              <FormField label="Full Name" htmlFor="name">
-                <input id="name" className="input" placeholder="Your full name" value={name} onChange={e => setName(e.target.value)} />
-              </FormField>
-              <FormField label="Email Address" htmlFor="email">
-                <input id="email" className="input opacity-60 cursor-not-allowed" value={profile.email} readOnly />
+              <Field label="Full Name" htmlFor="name">
+                <input id="name" className="input" placeholder="Your full name"
+                  value={name} onChange={e => setName(e.target.value)} />
+              </Field>
+              <Field label="Email Address" htmlFor="email">
+                <input id="email" className="input opacity-60 cursor-not-allowed"
+                  value={profile.email} readOnly />
                 <p className="text-xs mt-1" style={{ color: 'var(--apple-mid)' }}>Email cannot be changed.</p>
-              </FormField>
-              <FormField label="Phone Number" htmlFor="phone">
-                <input id="phone" className="input" placeholder="+1 (555) 000-0000" value={phone} onChange={e => setPhone(e.target.value)} />
-              </FormField>
-              <FormField label="About Me" htmlFor="about">
-                <textarea id="about" className="input" placeholder="Tell hosts and tenants a bit about yourself…" value={about} onChange={e => setAbout(e.target.value)} rows={4} />
-              </FormField>
+              </Field>
+              <Field label="Phone Number" htmlFor="phone">
+                <input id="phone" className="input" placeholder="+1 (555) 000-0000"
+                  value={phone} onChange={e => setPhone(e.target.value)} />
+              </Field>
+              <Field label="About Me" htmlFor="about">
+                <textarea id="about" className="input" rows={4}
+                  placeholder="Tell hosts and tenants a bit about yourself…"
+                  value={about} onChange={e => setAbout(e.target.value)} />
+              </Field>
               <button type="submit" className="btn-primary" disabled={saving}>
                 {saving ? 'Saving…' : 'Save Changes'}
               </button>
@@ -243,12 +204,12 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* ── Tab: My Listings ──────────────────────────────────── */}
+        {/* ── My Listings ───────────────────────────────── */}
         {tab === 'listings' && (
           <div>
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-semibold" style={{ color: 'var(--apple-dark)' }}>My Listings</h2>
-              <Link href="/add-listing" className="btn-primary text-sm px-4 py-2">+ Add New Listing</Link>
+              <Link href="/add-listing" className="btn-primary text-sm px-4 py-2">+ Add New</Link>
             </div>
             {listingCount === 0 ? (
               <div className="card p-12 text-center">
@@ -261,17 +222,19 @@ export default function ProfilePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {(profile.listings || []).map(l => (
                   <div key={l.id} className="card p-5 flex gap-4">
-                    <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: `hsl(${(l.id * 47) % 360}, 60%, 58%)` }} />
+                    <div className="w-1 self-stretch rounded-full flex-shrink-0"
+                         style={{ background: `hsl(${(l.id * 47) % 360}, 60%, 58%)` }} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <Link href={`/listings/${l.id}`} className="font-semibold text-sm hover:underline" style={{ color: 'var(--apple-dark)' }}>
-                            {l.title}
-                          </Link>
+                          <Link href={`/listings/${l.id}`}
+                            className="font-semibold text-sm hover:underline"
+                            style={{ color: 'var(--apple-dark)' }}>{l.title}</Link>
                           <p className="text-xs mt-0.5" style={{ color: 'var(--apple-blue)' }}>${l.rent}/mo</p>
                           {l.address && <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--apple-mid)' }}>{l.address}</p>}
                         </div>
-                        <button onClick={() => handleDelete(l.id)} disabled={deletingId === l.id} className="btn-danger flex-shrink-0 text-xs">
+                        <button onClick={() => handleDelete(l.id)} disabled={deletingId === l.id}
+                          className="btn-danger flex-shrink-0 text-xs">
                           {deletingId === l.id ? '…' : 'Delete'}
                         </button>
                       </div>
@@ -287,23 +250,28 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* ── Tab: Security ─────────────────────────────────────── */}
+        {/* ── Security ──────────────────────────────────── */}
         {tab === 'security' && (
           <div className="card p-6 max-w-xl">
             <h2 className="text-lg font-semibold mb-1" style={{ color: 'var(--apple-dark)' }}>Change Password</h2>
-            <p className="text-sm mb-5" style={{ color: 'var(--apple-mid)' }}>Use a strong password with letters, numbers, and symbols.</p>
+            <p className="text-sm mb-5" style={{ color: 'var(--apple-mid)' }}>
+              Use a strong password with letters, numbers, and symbols.
+            </p>
             {pwdMsg && <Alert type="success" msg={pwdMsg} onDismiss={() => setPwdMsg('')} />}
             {pwdErr && <Alert type="error"   msg={pwdErr} onDismiss={() => setPwdErr('')} />}
             <form onSubmit={handlePassword} className="space-y-4">
-              <FormField label="Current Password" htmlFor="oldPwd">
-                <input id="oldPwd" type="password" className="input" value={oldPwd} onChange={e => setOldPwd(e.target.value)} required />
-              </FormField>
-              <FormField label="New Password" htmlFor="newPwd">
-                <input id="newPwd" type="password" className="input" value={newPwd} onChange={e => setNewPwd(e.target.value)} required />
-              </FormField>
-              <FormField label="Confirm New Password" htmlFor="confirmPwd">
-                <input id="confirmPwd" type="password" className="input" value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} required />
-              </FormField>
+              <Field label="Current Password" htmlFor="oldPwd">
+                <input id="oldPwd" type="password" className="input"
+                  value={oldPwd} onChange={e => setOldPwd(e.target.value)} required />
+              </Field>
+              <Field label="New Password" htmlFor="newPwd">
+                <input id="newPwd" type="password" className="input"
+                  value={newPwd} onChange={e => setNewPwd(e.target.value)} required />
+              </Field>
+              <Field label="Confirm New Password" htmlFor="confirmPwd">
+                <input id="confirmPwd" type="password" className="input"
+                  value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} required />
+              </Field>
               <button type="submit" className="btn-primary">Update Password</button>
             </form>
           </div>
@@ -313,7 +281,6 @@ export default function ProfilePage() {
   );
 }
 
-// ── Small reusable components ──────────────────────────────────────────────
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="text-center">
@@ -323,7 +290,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
-function FormField({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) {
+function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) {
   return (
     <div>
       <label htmlFor={htmlFor} className="label">{label}</label>
@@ -341,8 +308,4 @@ function Alert({ type, msg, onDismiss }: { type: 'success' | 'error'; msg: strin
       <button onClick={onDismiss} className="flex-shrink-0 opacity-60 hover:opacity-100">✕</button>
     </div>
   );
-}
-
-function Spinner() {
-  return <div className="w-8 h-8 border-2 rounded-full animate-spin mx-auto" style={{ borderColor: 'var(--apple-border)', borderTopColor: 'var(--apple-blue)' }} />;
 }
