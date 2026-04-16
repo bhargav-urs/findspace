@@ -27,6 +27,14 @@ public class Listing {
     @Column(nullable = false)
     private Instant createdAt = Instant.now();
 
+    /**
+     * Whether this listing is publicly visible.
+     * Listings with associated conversations cannot be hard-deleted —
+     * they are soft-deleted by setting active = false instead.
+     */
+    @Column(nullable = false)
+    private boolean active = true;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id")
     private User owner;
@@ -34,66 +42,24 @@ public class Listing {
     public Listing() {}
 
     public Listing(String title, String description, BigDecimal rent, String address, User owner) {
-        this.title = title;
-        this.description = description;
-        this.rent = rent;
-        this.address = address;
-        this.owner = owner;
+        this.title = title; this.description = description;
+        this.rent = rent; this.address = address; this.owner = owner;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public BigDecimal getRent() {
-        return rent;
-    }
-
-    public void setRent(BigDecimal rent) {
-        this.rent = rent;
-    }
-
-    public String getAddress() {
-        return address;
-    }
-
-    public void setAddress(String address) {
-        this.address = address;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(Instant createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public User getOwner() {
-        return owner;
-    }
-
-    public void setOwner(User owner) {
-        this.owner = owner;
-    }
+    public Long getId()                     { return id; }
+    public void setId(Long id)              { this.id = id; }
+    public String getTitle()                { return title; }
+    public void setTitle(String t)          { this.title = t; }
+    public String getDescription()          { return description; }
+    public void setDescription(String d)    { this.description = d; }
+    public BigDecimal getRent()             { return rent; }
+    public void setRent(BigDecimal r)       { this.rent = r; }
+    public String getAddress()              { return address; }
+    public void setAddress(String a)        { this.address = a; }
+    public Instant getCreatedAt()           { return createdAt; }
+    public void setCreatedAt(Instant c)     { this.createdAt = c; }
+    public boolean isActive()               { return active; }
+    public void setActive(boolean active)   { this.active = active; }
+    public User getOwner()                  { return owner; }
+    public void setOwner(User owner)        { this.owner = owner; }
 }

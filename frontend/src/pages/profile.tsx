@@ -6,7 +6,7 @@ import Layout from '../components/Layout';
 
 interface UserListing {
   id: number; title: string; description: string;
-  rent: number; address?: string; createdAt: string;
+  rent: number; address?: string; createdAt: string; active?: boolean;
 }
 interface Profile {
   id: number; email: string; role: string; createdAt: string;
@@ -89,10 +89,22 @@ export default function ProfilePage() {
   const handleDelete = async (listingId: number) => {
     setDeletingId(listingId);
     try {
-      await api.delete(`/listings/${listingId}`);
-      setProfile(prev => prev
-        ? { ...prev, listings: (prev.listings || []).filter(l => l.id !== listingId) }
-        : prev);
+      const res = await api.delete(`/listings/${listingId}`);
+      if (res.data?.deactivated) {
+        // Listing has conversations — soft deleted, mark as inactive
+        setProfile(prev => prev ? {
+          ...prev,
+          listings: (prev.listings || []).map(l =>
+            l.id === listingId ? { ...l, active: false } : l
+          )
+        } : prev);
+      } else {
+        // Hard deleted — remove from list entirely
+        setProfile(prev => prev ? {
+          ...prev,
+          listings: (prev.listings || []).filter(l => l.id !== listingId)
+        } : prev);
+      }
     } catch {}
     finally { setDeletingId(null); }
   };
@@ -221,27 +233,53 @@ export default function ProfilePage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {(profile.listings || []).map(l => (
-                  <div key={l.id} className="card p-5 flex gap-4">
+                  <div key={l.id} className="card p-5 flex gap-4"
+                       style={{ opacity: l.active === false ? 0.75 : 1 }}>
                     <div className="w-1 self-stretch rounded-full flex-shrink-0"
-                         style={{ background: `hsl(${(l.id * 47) % 360}, 60%, 58%)` }} />
+                         style={{ background: l.active === false ? 'var(--apple-border)' : `hsl(${(l.id * 47) % 360}, 60%, 58%)` }} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <Link href={`/listings/${l.id}`}
-                            className="font-semibold text-sm hover:underline"
-                            style={{ color: 'var(--apple-dark)' }}>{l.title}</Link>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Link href={`/listings/${l.id}`}
+                              className="font-semibold text-sm hover:underline"
+                              style={{ color: 'var(--apple-dark)' }}>{l.title}</Link>
+                            {l.active === false && (
+                              <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
+                                    style={{ background: 'rgba(255,59,48,0.1)', color: 'var(--apple-red)' }}>
+                                Inactive
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs mt-0.5" style={{ color: 'var(--apple-blue)' }}>${l.rent}/mo</p>
                           {l.address && <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--apple-mid)' }}>{l.address}</p>}
                         </div>
-                        <button onClick={() => handleDelete(l.id)} disabled={deletingId === l.id}
-                          className="btn-danger flex-shrink-0 text-xs">
-                          {deletingId === l.id ? '…' : 'Delete'}
-                        </button>
+                        {/* Action buttons */}
+                        <div className="flex gap-2 flex-shrink-0">
+                          <Link href={`/edit-listing/${l.id}`}
+                            className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full font-medium"
+                            style={{ background: 'rgba(0,113,227,0.1)', color: 'var(--apple-blue)', textDecoration: 'none' }}>
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                            </svg>
+                            Edit
+                          </Link>
+                          <button onClick={() => handleDelete(l.id)} disabled={deletingId === l.id}
+                            className="btn-danger text-xs px-3 py-1.5">
+                            {deletingId === l.id ? '…' : l.active === false ? 'Remove' : 'Delete'}
+                          </button>
+                        </div>
                       </div>
                       <p className="text-xs mt-2 line-clamp-2" style={{ color: 'var(--apple-mid)' }}>{l.description}</p>
                       <p className="text-xs mt-1" style={{ color: 'var(--apple-mid)' }}>
                         Posted {new Date(l.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </p>
+                      {l.active === false && (
+                        <p className="text-xs mt-1" style={{ color: 'var(--apple-mid)' }}>
+                          This listing is hidden from public view. Edit it to reactivate.
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}

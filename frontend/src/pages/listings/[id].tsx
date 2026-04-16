@@ -4,7 +4,7 @@ import Link from 'next/link';
 import api from '../../lib/api';
 import Layout from '../../components/Layout';
 
-interface Listing { id: number; title: string; description: string; rent: number; address?: string; createdAt: string; ownerId?: number; ownerEmail?: string; ownerName?: string; }
+interface Listing { id: number; title: string; description: string; rent: number; address?: string; createdAt: string; ownerId?: number; ownerEmail?: string; ownerName?: string; active?: boolean; }
 
 export default function ListingDetail() {
   const router = useRouter();
@@ -84,6 +84,18 @@ export default function ListingDetail() {
 
         {listing && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Inactive banner */}
+            {listing.active === false && (
+              <div className="lg:col-span-3 p-4 rounded-2xl flex items-center gap-3"
+                   style={{ background: 'rgba(255,59,48,0.08)', border: '1px solid rgba(255,59,48,0.2)' }}>
+                <svg className="w-5 h-5 flex-shrink-0" style={{ color: 'var(--apple-red)' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <p className="text-sm font-medium" style={{ color: 'var(--apple-red)' }}>
+                  This listing is currently inactive and not visible to the public.
+                </p>
+              </div>
+            )}
             {/* Main content */}
             <div className="lg:col-span-2 space-y-5">
               {/* Title card */}
@@ -123,7 +135,7 @@ export default function ListingDetail() {
                   <Detail label="Monthly Rent" value={`$${listing.rent}`} />
                   {listing.address && <Detail label="Location" value={listing.address} />}
                   <Detail label="Listed On" value={new Date(listing.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} />
-                  <Detail label="Status" value="Available" badge="green" />
+                  <Detail label="Status" value={listing.active === false ? 'Inactive' : 'Available'} badge={listing.active === false ? 'red' : 'green'} />
                 </div>
               </div>
             </div>
@@ -206,8 +218,11 @@ function Detail({ label, value, badge }: { label: string; value: string; badge?:
       <p className="text-xs mb-1" style={{ color: 'var(--apple-mid)' }}>{label}</p>
       {badge === 'green' ? (
         <span className="inline-flex items-center gap-1 text-sm font-semibold" style={{ color: '#25a244' }}>
-          <span className="w-2 h-2 rounded-full bg-green-400" />
-          {value}
+          <span className="w-2 h-2 rounded-full bg-green-400" />{value}
+        </span>
+      ) : badge === 'red' ? (
+        <span className="inline-flex items-center gap-1 text-sm font-semibold" style={{ color: 'var(--apple-red)' }}>
+          <span className="w-2 h-2 rounded-full" style={{ background: 'var(--apple-red)' }} />{value}
         </span>
       ) : (
         <p className="text-sm font-semibold" style={{ color: 'var(--apple-dark)' }}>{value}</p>

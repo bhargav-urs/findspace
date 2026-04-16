@@ -167,28 +167,19 @@ export default function MessagesPage() {
               </div>
             ) : (
               <>
-                {/* Header — click to view their profile */}
-                <div className="px-5 py-3.5 border-b flex items-center justify-between"
-                     style={{ borderColor: 'var(--apple-border)' }}>
-                  <button
-                    onClick={() => {
-                      if (selectedConv?.otherUserId) {
-                        router.push(`/users/${selectedConv.otherUserId}`);
-                      }
-                    }}
-                    className="flex items-center gap-3"
-                    style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
-                    title={`View ${otherName}'s profile`}
-                  >
+                {/* Header */}
+                <div className="px-5 py-3 border-b flex items-center justify-between"
+                     style={{ borderColor: 'var(--apple-border)', background: '#fff' }}>
+                  {/* Left: avatar + name */}
+                  <div className="flex items-center gap-3">
                     <div
                       className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
                       style={{ background: `hsl(${((selectedConv?.otherUserId || 1) * 83) % 360}, 55%, 55%)` }}
                     >
                       {otherInitials}
                     </div>
-                    <div className="text-left">
-                      <p className="text-sm font-semibold"
-                         style={{ color: 'var(--apple-blue)', textDecoration: 'underline' }}>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: 'var(--apple-dark)' }}>
                         {otherName}
                       </p>
                       {selectedConv?.listingId && (
@@ -197,12 +188,34 @@ export default function MessagesPage() {
                         </p>
                       )}
                     </div>
-                    <svg className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--apple-blue)' }}
-                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                    </svg>
-                  </button>
+                  </div>
+
+                  {/* Right: View Profile button — always visible */}
+                  {selectedConv?.otherUserId && (
+                    <a
+                      href={`/users/${selectedConv.otherUserId}`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        background: 'rgba(0,113,227,0.1)',
+                        color: 'var(--apple-blue)',
+                        fontSize: '0.8125rem',
+                        fontWeight: 500,
+                        padding: '6px 14px',
+                        borderRadius: '980px',
+                        textDecoration: 'none',
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                      </svg>
+                      View Profile
+                    </a>
+                  )}
                 </div>
 
                 {/* Messages */}
